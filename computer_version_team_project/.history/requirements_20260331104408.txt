@@ -1,0 +1,11 @@
+numpy==2.4.4
+opencv-python==4.13.0.92
+opencv-contrib-python==4.13.0.92
+ultralytics==8.4.32
+mediapipe==0.10.33
+openai-whisper==20250625
+pyttsx3==2.99
+PyAudio==0.2.14
+imageio-ffmpeg==0.6.0
+torch==2.11.0
+torchvision==0.26.0
