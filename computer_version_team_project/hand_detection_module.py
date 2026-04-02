@@ -14,28 +14,38 @@ class HandObjectDetector:
         """Initialize the detector with models"""
         # Resolve paths relative to this script's directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.base_dir = base_dir
         
         # Initialize YOLO with Medium model for better accuracy
         self.yolo_model = YOLO(os.path.join(base_dir, 'yolov8m.pt'))
-        
-        # Initialize MediaPipe hand detection
+        self.hand_backend = 'mediapipe'
+        self.detector = None
+        self.pose_model = None
+
+        # Initialize MediaPipe hand detection, but fall back to YOLO pose when
+        # Windows application control blocks the unsigned MediaPipe DLL.
         model_path = os.path.join(base_dir, 'hand_landmarker.task')
-        
+
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Cannot find {model_path} file")
-        
-        base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
-        self.detector = vision.HandLandmarker.create_from_options(options)
+
+        try:
+            base_options = python.BaseOptions(model_asset_path=model_path)
+            options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
+            self.detector = vision.HandLandmarker.create_from_options(options)
+        except OSError as error:
+            self.hand_backend = 'yolo_pose'
+            self.pose_model = YOLO(os.path.join(base_dir, 'yolov8n-pose.pt'))
+            print(f"MediaPipe hand backend unavailable ({error}). Falling back to YOLO pose.")
         
         self.PERSON_CLASS_ID = 0
         self.target_object = target_object.lower()
 
     def get_hand_anchor_point(self, hand_landmarks, frame_width, frame_height):
-        """Estimate a stable hand position from the palm instead of fingertips."""
-        anchor_indices = [0, 5, 9, 13, 17]
-        anchor_x = int(sum(hand_landmarks[index].x for index in anchor_indices) / len(anchor_indices) * frame_width)
-        anchor_y = int(sum(hand_landmarks[index].y for index in anchor_indices) / len(anchor_indices) * frame_height)
+        """Match the working MediaPipe script by using the middle fingertip."""
+        middle_finger = hand_landmarks[12]
+        anchor_x = int(middle_finger.x * frame_width)
+        anchor_y = int(middle_finger.y * frame_height)
         return anchor_x, anchor_y
 
     
@@ -86,6 +96,34 @@ class HandObjectDetector:
             'object_depth': object_depth
         }
 
+    def detect_hand_with_pose(self, frame, annotated_frame):
+        """Use wrist keypoints from YOLO pose as a fallback hand anchor."""
+        hand_x, hand_y = None, None
+        pose_results = self.pose_model(frame, verbose=False)
+        keypoints = pose_results[0].keypoints
+
+        if keypoints is not None and keypoints.xy is not None and len(keypoints.xy) > 0:
+            person_points = keypoints.xy[0]
+            wrist_points = []
+
+            for index in (9, 10):
+                wrist_x, wrist_y = person_points[index]
+                if wrist_x > 0 and wrist_y > 0:
+                    wrist_points.append((int(wrist_x), int(wrist_y)))
+
+            if wrist_points:
+                hand_x = int(sum(point[0] for point in wrist_points) / len(wrist_points))
+                hand_y = int(sum(point[1] for point in wrist_points) / len(wrist_points))
+
+                for wrist_x, wrist_y in wrist_points:
+                    cv2.circle(annotated_frame, (wrist_x, wrist_y), 8, (0, 165, 255), -1)
+
+                cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
+                cv2.putText(annotated_frame, "HAND (POSE)", (hand_x - 70, hand_y - 40),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+        return hand_x, hand_y
+
     def process_frame(self, frame):
         """Process a single frame and return both annotated frame and detection info"""
         height, width, c = frame.shape
@@ -93,43 +131,43 @@ class HandObjectDetector:
         results_yolo = self.yolo_model(frame)
         annotated_frame = results_yolo[0].plot()
 
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-        detection_result = self.detector.detect(mp_image)
-
         # Get hand position
         hand_x, hand_y = None, None
-        if detection_result.hand_landmarks:
-            for hand_landmarks in detection_result.hand_landmarks:
-                hand_x, hand_y = self.get_hand_anchor_point(hand_landmarks, width, height)
+        if self.hand_backend == 'mediapipe':
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            detection_result = self.detector.detect(mp_image)
 
-                # Draw all landmarks (green dots)
-                for landmark in hand_landmarks:
-                    lx = int(landmark.x * width)
-                    ly = int(landmark.y * height)
-                    cv2.circle(annotated_frame, (lx, ly), 4, (0, 255, 0), -1)
+            if detection_result.hand_landmarks:
+                for hand_landmarks in detection_result.hand_landmarks:
+                    hand_x, hand_y = self.get_hand_anchor_point(hand_landmarks, width, height)
 
-                # Draw hand skeleton
-                connections = [
-                    (0, 1), (1, 2), (2, 3), (3, 4),
-                    (0, 5), (5, 6), (6, 7), (7, 8),
-                    (0, 9), (9, 10), (10, 11), (11, 12),
-                    (0, 13), (13, 14), (14, 15), (15, 16),
-                    (0, 17), (17, 18), (18, 19), (19, 20),
-                    (5, 9), (9, 13), (13, 17)
-                ]
+                    for landmark in hand_landmarks:
+                        lx = int(landmark.x * width)
+                        ly = int(landmark.y * height)
+                        cv2.circle(annotated_frame, (lx, ly), 4, (0, 255, 0), -1)
 
-                for start, end in connections:
-                    start_point = (int(hand_landmarks[start].x * width),
-                                  int(hand_landmarks[start].y * height))
-                    end_point = (int(hand_landmarks[end].x * width),
-                                int(hand_landmarks[end].y * height))
-                    cv2.line(annotated_frame, start_point, end_point, (255, 0, 0), 2)
+                    connections = [
+                        (0, 1), (1, 2), (2, 3), (3, 4),
+                        (0, 5), (5, 6), (6, 7), (7, 8),
+                        (0, 9), (9, 10), (10, 11), (11, 12),
+                        (0, 13), (13, 14), (14, 15), (15, 16),
+                        (0, 17), (17, 18), (18, 19), (19, 20),
+                        (5, 9), (9, 13), (13, 17)
+                    ]
 
-                # Draw red circle at palm center
-                cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
-                cv2.putText(annotated_frame, "HAND", (hand_x - 50, hand_y - 50),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    for start, end in connections:
+                        start_point = (int(hand_landmarks[start].x * width),
+                                      int(hand_landmarks[start].y * height))
+                        end_point = (int(hand_landmarks[end].x * width),
+                                    int(hand_landmarks[end].y * height))
+                        cv2.line(annotated_frame, start_point, end_point, (255, 0, 0), 2)
+
+                    cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
+                    cv2.putText(annotated_frame, "HAND", (hand_x - 50, hand_y - 50),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        else:
+            hand_x, hand_y = self.detect_hand_with_pose(frame, annotated_frame)
 
         # 3. Analyze hand-object relationship
         # Only detect target object

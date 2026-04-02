@@ -10,11 +10,29 @@ from hand_detection_module import HandObjectDetector
 from depth_detection_module import DepthDetector
 from voice_module import VoiceDetector
 
+
+SUPPORTED_TARGET_OBJECTS = [
+    "cell phone",
+    "mouse",
+    "cup",
+    "bottle",
+    "book",
+    "remote",
+    "keyboard",
+    "laptop",
+]
+
 print("Loading models...")
 
 # 先创建检测器获取 YOLO 类名列表
 hand_detector = HandObjectDetector()
-yolo_class_names = list(hand_detector.yolo_model.names.values())
+available_class_names = {name.lower() for name in hand_detector.yolo_model.names.values()}
+yolo_class_names = [
+    name for name in SUPPORTED_TARGET_OBJECTS if name.lower() in available_class_names
+]
+
+if not yolo_class_names:
+    raise RuntimeError("No supported target objects were found in the YOLO model class list.")
 
 # 语音输入目标物体
 voice = VoiceDetector(yolo_class_names)
@@ -43,13 +61,15 @@ frame_count = 0
 _speaking = False
 _last_speak_time = 0
 SPEAK_COOLDOWN = 1  # 每次语音间隔至少1秒（改为1秒，之前是3秒导致语音停止）
+_last_grab_speak_time = 0
+GRAB_REPEAT_SECONDS = 3
 
 def speak_async(text):
     """非阻塞语音播报，避免卡住主循环"""
     global _speaking, _last_speak_time
     now = time.time()
     if _speaking or (now - _last_speak_time) < SPEAK_COOLDOWN:
-        return
+        return False
     _speaking = True
     _last_speak_time = now
     def _run():
@@ -59,6 +79,7 @@ def speak_async(text):
         finally:
             _speaking = False
     threading.Thread(target=_run, daemon=True).start()
+    return True
 
 last_guidance = ""
 
@@ -85,10 +106,10 @@ while True:
     # 3. 上下对齐
     # 4. 左右对齐
     
-    if hand_result['distance_2d'] is not None and hand_result['distance_2d'] < 120:
+    if hand_result['distance_2d'] is not None and hand_result['distance_2d'] < 100:
         # 计算满足的条件数
         conditions_met = sum([
-            hand_result['distance_2d'] < 120,                  # 条件1：距离 < 100px
+            hand_result['distance_2d'] < 100,                  # 条件1：距离 < 100px
             depth_result.get('is_same_depth', False),         # 条件2：深度相同
             hand_result['is_vertically_aligned'],             # 条件3：上下对齐
             hand_result['is_horizontally_aligned']            # 条件4：左右对齐
@@ -102,10 +123,17 @@ while True:
         cv2.putText(annotated_frame, " GET IT! ", 
                    (10, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 5)
         cv2.rectangle(annotated_frame, (5, 200), (450, 245), (0, 255, 0), 4)
-        
+
+        grab_prompt = f"Got the {target_object}! Now lift it up!"
+        current_time = time.time()
+
         if last_guidance != "grab":
-            speak_async(f"Got the {target_object}! Now lift it up!")
+            if speak_async(grab_prompt):
+                _last_grab_speak_time = current_time
             last_guidance = "grab"
+        elif current_time - _last_grab_speak_time >= GRAB_REPEAT_SECONDS:
+            if speak_async(grab_prompt):
+                _last_grab_speak_time = current_time
     else:
         guidance_parts = []
         
@@ -157,12 +185,11 @@ while True:
         guidance = ", ".join(guidance_parts) if guidance_parts else "detecting"
         
         # 提高方向引导的播报频率：每 15 帧尝试播报一次（加上 1 秒冷却时间，实现每秒一次播报）
-        if guidance != "detecting" and frame_count % 15 == 0:
+        if guidance != "detecting" and frame_count % 9 == 0:
             speak_async(guidance)
         
-        # 更新最后的引导内容
-        if guidance != "detecting":
-            last_guidance = guidance
+        # 更新最后的引导内容，离开 grab 状态后允许下次重新首播
+        last_guidance = guidance
         
         # 显示未就位的原因
         reason = []

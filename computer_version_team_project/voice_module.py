@@ -85,6 +85,27 @@ ALIAS_MAP = {
     "mug": "cup",
 }
 
+YES_WORDS = {
+    "yes",
+    "yeah",
+    "yep",
+    "correct",
+    "right",
+    "ok",
+    "okay",
+    "sure",
+    "affirmative",
+}
+
+NO_WORDS = {
+    "no",
+    "nope",
+    "wrong",
+    "incorrect",
+    "not",
+    "negative",
+}
+
 
 class VoiceDetector:
     """Use Whisper and OpenRouter to choose a target object by voice."""
@@ -93,6 +114,7 @@ class VoiceDetector:
         self.yolo_class_names = [name.lower() for name in yolo_class_names]
         self.default_target = default_target
         self.max_retries = 5
+        self.max_confirmation_retries = 3
         self.min_match_score = 0.55
         self.candidate_display_count = 3
 
@@ -349,12 +371,19 @@ class VoiceDetector:
 
         return words
 
-    def get_target_object(self):
-        """Ask for a target object and return the best supported match."""
-        print("=" * 50)
-        print("Tell me what object you want to find")
-        print("You can say a full sentence, for example: find my phone on the desk")
-        print("=" * 50)
+    def is_yes_response(self, speech_text):
+        """Return True when the confirmation response is affirmative."""
+        normalized = self.normalize_text(speech_text)
+        if not normalized:
+            return False
+        return any(word in normalized.split() or word in normalized for word in YES_WORDS)
+
+    def is_no_response(self, speech_text):
+        """Return True when the confirmation response is negative."""
+        normalized = self.normalize_text(speech_text)
+        if not normalized:
+            return False
+        return any(word in normalized.split() or word in normalized for word in NO_WORDS)
 
     def get_target_object(self):
         """Ask for a target object and return the best supported match."""
@@ -374,9 +403,49 @@ class VoiceDetector:
                 print(f"Matched target: {extracted}")
                 if reason:
                     print(f"Match reason: {reason}")
-                self.speak(f"OK, looking for {extracted}")
-                print(f"Confirmed target: {extracted}\n")
-                return extracted
+
+                confirmation_accepted = False
+                user_rejected = False
+
+                for confirmation_attempt in range(self.max_confirmation_retries):
+                    if confirmation_attempt == 0:
+                        prompt = f"I heard {extracted}. Is that correct? Please say yes or no."
+                    else:
+                        prompt = "I still need a yes or no answer. Please say yes or no."
+
+                    confirmation = self.listen_once(prompt)
+
+                    if confirmation is None:
+                        print("Confirmation not heard clearly.")
+                        if confirmation_attempt < self.max_confirmation_retries - 1:
+                            self.speak("I did not hear your answer clearly. Please say yes or no.")
+                        continue
+
+                    if self.is_yes_response(confirmation):
+                        confirmation_accepted = True
+                        break
+
+                    if self.is_no_response(confirmation):
+                        user_rejected = True
+                        break
+
+                    print(f"Unclear confirmation response: {confirmation}")
+                    if confirmation_attempt < self.max_confirmation_retries - 1:
+                        self.speak("Please answer with yes or no.")
+
+                if confirmation_accepted:
+                    self.speak(f"OK, looking for {extracted}")
+                    print(f"Confirmed target: {extracted}\n")
+                    return extracted
+
+                if user_rejected:
+                    print("User rejected matched target. Asking again.\n")
+                    self.speak("Okay, please say the object again.")
+                    continue
+
+                print("Confirmation failed after multiple attempts. Asking for the object again.\n")
+                self.speak("I could not confirm the object. Please say the object again.")
+                continue
 
             print("The request did not match a supported object.")
             if reason:

@@ -14,28 +14,37 @@ class DepthDetector:
         """初始化深度检测模块"""
         # 获取路径
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.base_dir = base_dir
         
         # 初始化 YOLO
         self.yolo_model = YOLO(os.path.join(base_dir, 'yolov8m.pt'))
-        
-        # 初始化 MediaPipe 手部检测
+        self.hand_backend = 'mediapipe'
+        self.detector = None
+        self.pose_model = None
+
+        # 初始化 MediaPipe 手部检测，若被系统策略阻止则回退到 YOLO pose。
         model_path = os.path.join(base_dir, 'hand_landmarker.task')
-        
+
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Cannot find {model_path} file")
-        
-        base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
-        self.detector = vision.HandLandmarker.create_from_options(options)
+
+        try:
+            base_options = python.BaseOptions(model_asset_path=model_path)
+            options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
+            self.detector = vision.HandLandmarker.create_from_options(options)
+        except OSError as error:
+            self.hand_backend = 'yolo_pose'
+            self.pose_model = YOLO(os.path.join(base_dir, 'yolov8n-pose.pt'))
+            print(f"MediaPipe depth backend unavailable ({error}). Falling back to YOLO pose.")
         
         self.DEPTH_THRESHOLD = 0.05
         self.target_object = target_object.lower()
 
     def get_hand_anchor_point(self, hand_landmarks, frame_width, frame_height):
-        """使用手掌中心作为更稳定的手部位置。"""
-        anchor_indices = [0, 5, 9, 13, 17]
-        anchor_x = int(sum(hand_landmarks[index].x for index in anchor_indices) / len(anchor_indices) * frame_width)
-        anchor_y = int(sum(hand_landmarks[index].y for index in anchor_indices) / len(anchor_indices) * frame_height)
+        """与可运行示例保持一致，使用中指指尖作为手部位置。"""
+        middle_finger = hand_landmarks[12]
+        anchor_x = int(middle_finger.x * frame_width)
+        anchor_y = int(middle_finger.y * frame_height)
         return anchor_x, anchor_y
 
     
@@ -78,6 +87,36 @@ class DepthDetector:
         obj_depth = min(1.0, obj_size * 2)
         
         return obj_depth, obj_size
+
+    def detect_hand_with_pose(self, frame, annotated_frame):
+        """Use pose wrists as a fallback hand position when MediaPipe is blocked."""
+        hand_detected = False
+        hand_x, hand_y = None, None
+        pose_results = self.pose_model(frame, verbose=False)
+        keypoints = pose_results[0].keypoints
+
+        if keypoints is not None and keypoints.xy is not None and len(keypoints.xy) > 0:
+            person_points = keypoints.xy[0]
+            wrist_points = []
+
+            for index in (9, 10):
+                wrist_x, wrist_y = person_points[index]
+                if wrist_x > 0 and wrist_y > 0:
+                    wrist_points.append((int(wrist_x), int(wrist_y)))
+
+            if wrist_points:
+                hand_detected = True
+                hand_x = int(sum(point[0] for point in wrist_points) / len(wrist_points))
+                hand_y = int(sum(point[1] for point in wrist_points) / len(wrist_points))
+
+                for wrist_x, wrist_y in wrist_points:
+                    cv2.circle(annotated_frame, (wrist_x, wrist_y), 8, (0, 165, 255), -1)
+
+                cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
+                cv2.putText(annotated_frame, "HAND (POSE)", (hand_x - 70, hand_y - 40),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+        return hand_detected, hand_x, hand_y
     
     def process_frame(self, frame):
         """
@@ -130,47 +169,46 @@ class DepthDetector:
                 break
         
         # 2. 手部检测
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-        detection_result = self.detector.detect(mp_image)
-        
         hand_detected = False
         hand_x, hand_y = None, None
         hand_depth = None
         hand_size = None
         
-        if detection_result.hand_landmarks:
-            hand_detected = True
-            for hand_landmarks in detection_result.hand_landmarks:
-                hand_x, hand_y = self.get_hand_anchor_point(hand_landmarks, width, height)
-                
-                # 估计手的深度
-                hand_depth, hand_size = self.estimate_hand_depth(hand_landmarks, width, height)
-                
-                # 绘制手部骨架
-                connections = [
-                    (0, 1), (1, 2), (2, 3), (3, 4),
-                    (0, 5), (5, 6), (6, 7), (7, 8),
-                    (0, 9), (9, 10), (10, 11), (11, 12),
-                    (0, 13), (13, 14), (14, 15), (15, 16),
-                    (0, 17), (17, 18), (18, 19), (19, 20),
-                    (5, 9), (9, 13), (13, 17)
-                ]
-                
-                for landmark in hand_landmarks:
-                    lx = int(landmark.x * width)
-                    ly = int(landmark.y * height)
-                    cv2.circle(annotated_frame, (lx, ly), 4, (0, 255, 0), -1)
-                
-                for start, end in connections:
-                    start_point = (int(hand_landmarks[start].x * width), 
-                                  int(hand_landmarks[start].y * height))
-                    end_point = (int(hand_landmarks[end].x * width), 
-                                int(hand_landmarks[end].y * height))
-                    cv2.line(annotated_frame, start_point, end_point, (0, 255, 0), 2)
-                
-                # 绘制手掌中心（红色大圆）
-                cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
+        if self.hand_backend == 'mediapipe':
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            detection_result = self.detector.detect(mp_image)
+
+            if detection_result.hand_landmarks:
+                hand_detected = True
+                for hand_landmarks in detection_result.hand_landmarks:
+                    hand_x, hand_y = self.get_hand_anchor_point(hand_landmarks, width, height)
+                    hand_depth, hand_size = self.estimate_hand_depth(hand_landmarks, width, height)
+
+                    connections = [
+                        (0, 1), (1, 2), (2, 3), (3, 4),
+                        (0, 5), (5, 6), (6, 7), (7, 8),
+                        (0, 9), (9, 10), (10, 11), (11, 12),
+                        (0, 13), (13, 14), (14, 15), (15, 16),
+                        (0, 17), (17, 18), (18, 19), (19, 20),
+                        (5, 9), (9, 13), (13, 17)
+                    ]
+
+                    for landmark in hand_landmarks:
+                        lx = int(landmark.x * width)
+                        ly = int(landmark.y * height)
+                        cv2.circle(annotated_frame, (lx, ly), 4, (0, 255, 0), -1)
+
+                    for start, end in connections:
+                        start_point = (int(hand_landmarks[start].x * width),
+                                      int(hand_landmarks[start].y * height))
+                        end_point = (int(hand_landmarks[end].x * width),
+                                    int(hand_landmarks[end].y * height))
+                        cv2.line(annotated_frame, start_point, end_point, (0, 255, 0), 2)
+
+                    cv2.circle(annotated_frame, (hand_x, hand_y), 12, (0, 0, 255), -1)
+        else:
+            hand_detected, hand_x, hand_y = self.detect_hand_with_pose(frame, annotated_frame)
         
         # 3. 添加文本信息
         start_y = 40
@@ -186,6 +224,12 @@ class DepthDetector:
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
             cv2.putText(annotated_frame, f"Hand Depth: {hand_depth:.4f}", 
                        (10, start_y + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            start_y += 75
+        elif hand_detected and self.hand_backend != 'mediapipe':
+            cv2.putText(annotated_frame, "Hand: detected by YOLO pose", 
+                       (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            cv2.putText(annotated_frame, "Depth: unavailable in fallback mode", 
+                       (10, start_y + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 165, 255), 2)
             start_y += 75
         else:
             cv2.putText(annotated_frame, "Hand: Not detected", 
