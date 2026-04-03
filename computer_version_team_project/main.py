@@ -90,7 +90,7 @@ while True:
     
     frame_count += 1
     
-    # Process frame with hand detectorq
+    # Process frame with hand detector
     hand_result = hand_detector.process_frame(frame)
     
     # Process frame with depth detector

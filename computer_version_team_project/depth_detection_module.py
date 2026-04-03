@@ -129,43 +129,43 @@ class DepthDetector:
             Dictionary 包含:
             - annotated_frame: 标注后的帧
             - hand_detected: 手是否检测到
-            - mouse_detected: 鼠标是否检测到
+            - target_detected: 目标物体是否检测到
             - hand_depth: 手的深度值
-            - mouse_depth: 鼠标的深度值
+            - target_depth: 目标物体的深度值
             - hand_size: 手的大小
-            - mouse_size: 鼠标的大小
+            - target_size: 目标物体的大小
             - depth_diff: 深度差异
             - is_same_depth: 是否深度相同
         """
         height, width, c = frame.shape
         annotated_frame = frame.copy()
         
-        # 1. 手机检测
+        # 1. 目标物体检测
         results_yolo = self.yolo_model(frame)
         boxes = results_yolo[0].boxes
         
-        mouse_detected = False
-        mouse_x, mouse_y = None, None
-        mouse_depth = None
-        mouse_size = None
+        target_detected = False
+        target_x, target_y = None, None
+        target_depth = None
+        target_size = None
         
         for box in boxes:
             class_id = int(box.cls[0])
             class_name = self.yolo_model.names[class_id]
             
             if class_name.lower() == self.target_object:
-                mouse_detected = True
+                target_detected = True
                 x1, y1, x2, y2 = box.xyxy[0]
-                mouse_x = (int(x1) + int(x2)) // 2
-                mouse_y = (int(y1) + int(y2)) // 2
+                target_x = (int(x1) + int(x2)) // 2
+                target_y = (int(y1) + int(y2)) // 2
                 
-                # 估计鼠标深度
-                mouse_depth, mouse_size = self.estimate_object_depth(box, width, height)
+                # 估计目标物体深度
+                target_depth, target_size = self.estimate_object_depth(box, width, height)
                 
-                # 绘制鼠标框（蓝色）
+                # 绘制目标物体框（蓝色）
                 cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), 
                              (255, 0, 0), 3)
-                cv2.circle(annotated_frame, (mouse_x, mouse_y), 8, (255, 0, 0), -1)
+                cv2.circle(annotated_frame, (target_x, target_y), 8, (255, 0, 0), -1)
                 break
         
         # 2. 手部检测
@@ -236,15 +236,15 @@ class DepthDetector:
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (100, 100, 100), 2)
             start_y += 40
         
-        # 鼠标信息
-        if mouse_detected and mouse_depth is not None:
-            cv2.putText(annotated_frame, f"Mouse Size: {mouse_size:.4f}", 
+        # 目标物体信息
+        if target_detected and target_depth is not None:
+            cv2.putText(annotated_frame, f"Target Size: {target_size:.4f}", 
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-            cv2.putText(annotated_frame, f"Mouse Depth: {mouse_depth:.4f}", 
+            cv2.putText(annotated_frame, f"Target Depth: {target_depth:.4f}", 
                        (10, start_y + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
             start_y += 75
         else:
-            cv2.putText(annotated_frame, "Mouse: Not detected", 
+            cv2.putText(annotated_frame, "Target: Not detected", 
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (100, 100, 100), 2)
             start_y += 40
         
@@ -256,8 +256,8 @@ class DepthDetector:
         depth_diff = None
         is_same_depth = False
         
-        if hand_detected and mouse_detected and hand_depth is not None and mouse_depth is not None:
-            depth_diff = hand_depth - mouse_depth
+        if hand_detected and target_detected and hand_depth is not None and target_depth is not None:
+            depth_diff = hand_depth - target_depth
             
             cv2.putText(annotated_frame, f"Depth Difference: {depth_diff:.4f}", 
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200, 200, 0), 2)
@@ -294,11 +294,11 @@ class DepthDetector:
         return {
             'annotated_frame': annotated_frame,
             'hand_detected': hand_detected,
-            'mouse_detected': mouse_detected,
+            'target_detected': target_detected,
             'hand_depth': hand_depth,
-            'mouse_depth': mouse_depth,
+            'target_depth': target_depth,
             'hand_size': hand_size,
-            'mouse_size': mouse_size,
+            'target_size': target_size,
             'depth_diff': depth_diff,
             'is_same_depth': is_same_depth
         }
