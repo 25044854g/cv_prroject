@@ -1,8 +1,0 @@
-Loading models...
-Traceback (most recent call last):
-  File "/workspaces/cv_prroject/computer_version_team_project/main.py", line 28, in <module>
-    hand_detector = HandObjectDetector()
-                    ^^^^^^^^^^^^^^^^^^^^
-  File "/workspaces/cv_prroject/computer_version_team_project/hand_detection_module.py", line 30, in __init__
-    raise FileNotFoundError(f"Cannot find {model_path} file")
-FileNotFoundError: Cannot find /workspaces/cv_prroject/computer_version_team_project/hand_landmarker.task file
