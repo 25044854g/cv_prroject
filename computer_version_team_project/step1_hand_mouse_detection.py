@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import os
 
-print("✓ MediaPipe version:", mp.__version__)
+print("MediaPipe version:", mp.__version__)
 
 # 获取路径
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +25,7 @@ print("Loading MediaPipe model...")
 base_options = python.BaseOptions(model_asset_path=model_path)
 options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
 detector = vision.HandLandmarker.create_from_options(options)
-print("✓ MediaPipe model loaded\n")
+print("MediaPipe model loaded\n")
 
 cap = cv2.VideoCapture(0)
 
@@ -33,7 +33,7 @@ if not cap.isOpened():
     print("ERROR: Cannot open camera")
     exit()
 
-print("✓ Depth Detection Started")
+print("Depth Detection Started")
 print("Press 'q' to exit...\n")
 
 frame_count = 0
@@ -214,7 +214,7 @@ while True:
         
         if abs(depth_diff) < depth_threshold:
             # 成功：在同一水平线
-            cv2.putText(annotated_frame, "✓ SUCCESS!", 
+            cv2.putText(annotated_frame, "SUCCESS!", 
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
             cv2.putText(annotated_frame, "Same depth level!", 
                        (10, start_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -230,7 +230,7 @@ while True:
                 status = "Hand FARTHER"
                 color = (0, 0, 255)  # 红色
             
-            cv2.putText(annotated_frame, "✗ DIFFERENT DEPTH", 
+            cv2.putText(annotated_frame, "DIFFERENT DEPTH", 
                        (10, start_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
             cv2.putText(annotated_frame, status, 
                        (10, start_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)

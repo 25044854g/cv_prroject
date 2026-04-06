@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import os
 
-print("✓ MediaPipe 版本:", mp.__version__)
+print("MediaPipe 版本:", mp.__version__)
 
 # 初始化 YOLO
 yolo_model = YOLO('yolov8n.pt')
@@ -15,24 +15,24 @@ yolo_model = YOLO('yolov8n.pt')
 model_path = 'hand_landmarker.task'
 
 if not os.path.exists(model_path):
-    print(f"❌ 错误：找不到 {model_path} 文件")
+    print(f"错误：找不到 {model_path} 文件")
     print("请先下载模型文件")
     exit()
 
-print("⏳ 加载 MediaPipe 模型...")
+print("加载 MediaPipe 模型...")
 base_options = python.BaseOptions(model_asset_path=model_path)
 options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
 detector = vision.HandLandmarker.create_from_options(options)
-print("✓ MediaPipe 模型加载完成\n")
+print("MediaPipe 模型加载完成\n")
 
 cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
-    print("❌ 无法打开摄像头")
+    print("无法打开摄像头")
     exit()
 
-print("✓ 手部+物体检测已启动（MediaPipe）")
-print("👋 将你的手指向某个物体")
+print("手部+物体检测已启动（MediaPipe）")
+print("将你的手指向某个物体")
 print("按 'q' 键退出...\n")
 
 frame_count = 0

@@ -15,7 +15,7 @@ mp_drawing = mp.solutions.drawing_utils
 cap = cv2.VideoCapture(0)
 
 print("✓ 手部检测已启动")
-print("👋 请在摄像头前挥动你的手")
+print(" 请在摄像头前挥动你的手")
 print("按 'q' 键退出...")
 
 while True:

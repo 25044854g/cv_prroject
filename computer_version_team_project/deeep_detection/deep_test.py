@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import os
 
-print("✓ MediaPipe version:", mp.__version__)
+print("MediaPipe version:", mp.__version__)
 
 # Resolve paths relative to this script's directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +27,7 @@ print("Loading MediaPipe model...")
 base_options = python.BaseOptions(model_asset_path=model_path)
 options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
 detector = vision.HandLandmarker.create_from_options(options)
-print("✓ MediaPipe model loaded\n")
+print("MediaPipe model loaded\n")
 
 cap = cv2.VideoCapture(0)
 
@@ -35,7 +35,7 @@ if not cap.isOpened():
     print("ERROR: Cannot open camera")
     exit()
 
-print("✓ Hand-Object Detection with Depth Started (MediaPipe + YOLOv8m)")
+print("Hand-Object Detection with Depth Started (MediaPipe + YOLOv8m)")
 print("Point your hand toward an object (NOT a person)")
 print("Press 'q' to exit...\n")
 
@@ -315,7 +315,6 @@ while True:
         cv2.putText(annotated_frame, instruction, 
                    (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
         
-        # ★★★ 关键判断：是���准备好抓取（三个条件都必须满足）★★★
         ready_to_grab = (
             distance_2d < 120 and              # 1. 2D距离小于120像素
             depth_result['is_in_front'] and   # 2. 手在物体前面（深度）

@@ -4,7 +4,7 @@ from ultralytics import YOLO
 model = YOLO('yolov8m.pt')
 cap = cv2.VideoCapture(0)
 
-print("✓ 物体检测已启动（详细信息版）")
+print("物体检测已启动（详细信息版）")
 print("按 'q' 键退出...")
 
 frame_count = 0

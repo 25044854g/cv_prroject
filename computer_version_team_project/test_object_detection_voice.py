@@ -10,7 +10,7 @@ import pyttsx3
 
 # 语音合成通过 speak() 函数调用，每次重新初始化避免卡死
 
-print("✓ MediaPipe version:", mp.__version__)
+print("MediaPipe version:", mp.__version__)
 
 # 获取路径
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -29,14 +29,14 @@ print("Loading MediaPipe model...")
 base_options = python.BaseOptions(model_asset_path=model_path)
 options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
 detector = vision.HandLandmarker.create_from_options(options)
-print("✓ MediaPipe model loaded\n")
+print("MediaPipe model loaded\n")
 
 # 初始化语音识别
 print("Initializing speech recognition...")
 recognizer = sr.Recognizer()
 microphone = sr.Microphone()
 
-print("✓ Speech recognition ready\n")
+print("Speech recognition ready\n")
 
 # 常见别名映射到 YOLO COCO 类名
 ALIAS_MAP = {
@@ -154,7 +154,7 @@ if not target_object:
     print("Too many retries. Using default target: cell phone")
     target_object = "cell phone"
 
-print(f"✓ Looking for: {target_object}\n")
+print(f"Looking for: {target_object}\n")
 print("Press 'q' to exit...\n")
 
 cap = cv2.VideoCapture(0)

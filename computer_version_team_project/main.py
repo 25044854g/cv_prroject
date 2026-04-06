@@ -24,7 +24,7 @@ SUPPORTED_TARGET_OBJECTS = [
 
 print("Loading models...")
 
-# 先创建检测器获取 YOLO 类名列表
+# First create detector to get YOLO class name list
 hand_detector = HandObjectDetector()
 available_class_names = {name.lower() for name in hand_detector.yolo_model.names.values()}
 yolo_class_names = [
@@ -34,11 +34,11 @@ yolo_class_names = [
 if not yolo_class_names:
     raise RuntimeError("No supported target objects were found in the YOLO model class list.")
 
-# 语音输入目标物体
+# Voice input target object
 voice = VoiceDetector(yolo_class_names)
 target_object = voice.get_target_object()
 
-# 设置目标物体
+# Set target object
 hand_detector.target_object = target_object.lower()
 depth_detector = DepthDetector(target_object=target_object)
 
@@ -51,21 +51,21 @@ if not cap.isOpened():
     print("ERROR: Cannot open camera")
     exit()
 
-print("✓ Hand-Object Detection with Depth Started")
+print("Hand-Object Detection with Depth Started")
 print(f"Looking for: {target_object}")
 print("Press 'q' to exit...\n")
 
 frame_count = 0
 
-# 语音导航：非阻塞播报 + 冷却时间
+# Voice navigation: non-blocking speech + cooldown time
 _speaking = False
 _last_speak_time = 0
-SPEAK_COOLDOWN = 1  # 每次语音间隔至少1秒（改为1秒，之前是3秒导致语音停止）
+SPEAK_COOLDOWN = 1  # Each voice interval at least 1 second (changed to 1 second, previously 3 seconds caused voice to stop)
 _last_grab_speak_time = 0
 GRAB_REPEAT_SECONDS = 3
 
 def speak_async(text):
-    """非阻塞语音播报，避免卡住主循环"""
+    """Non-blocking voice broadcast to avoid blocking the main loop"""
     global _speaking, _last_speak_time
     now = time.time()
     if _speaking or (now - _last_speak_time) < SPEAK_COOLDOWN:
@@ -96,29 +96,29 @@ while True:
     # Process frame with depth detector
     depth_result = depth_detector.process_frame(frame)
     
-    # 获取两个检测器的结果
+    # Get results from both detectors
     annotated_frame = hand_result['annotated_frame']
     
-    # ★★★ 判别逻辑：距离 < 100px 且满足至少 2 个条件 ★★★
-    # 4 个条件：
-    # 1. 距离 < 100px
-    # 2. 深度相同
-    # 3. 上下对齐
-    # 4. 左右对齐
+    # Judgment logic: distance < 100px and meet at least 2 conditions
+    # 4 conditions:
+    # 1. Distance < 100px
+    # 2. Same depth
+    # 3. Vertically aligned
+    # 4. Horizontally aligned
     
     if hand_result['distance_2d'] is not None and hand_result['distance_2d'] < 100:
-        # 计算满足的条件数
+        # Calculate number of conditions met
         conditions_met = sum([
-            hand_result['distance_2d'] < 100,                  # 条件1：距离 < 100px
-            depth_result.get('is_same_depth', False),         # 条件2：深度相同
-            hand_result['is_vertically_aligned'],             # 条件3：上下对齐
-            hand_result['is_horizontally_aligned']            # 条件4：左右对齐
+            hand_result['distance_2d'] < 100,                  # Condition 1: Distance < 100px
+            depth_result.get('is_same_depth', False),         # Condition 2: Same depth
+            hand_result['is_vertically_aligned'],             # Condition 3: Vertically aligned
+            hand_result['is_horizontally_aligned']            # Condition 4: Horizontally aligned
         ])
         ready_to_grab = conditions_met >= 2
     else:
         ready_to_grab = False
     
-    # 显示综合结果
+    # Display comprehensive results
     if ready_to_grab:
         cv2.putText(annotated_frame, " GET IT! ", 
                    (10, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 5)
@@ -138,11 +138,11 @@ while True:
         guidance_parts = []
         
         if hand_result['distance_2d'] is None:
-            # 手或物体未检测到
+            # Hand or object not detected
             if hand_result.get('direction') is None:
                 guidance_parts.append(f"Looking for {target_object}")
         else:
-            # 显示实时距离和阈值状态
+            # Display real-time distance and threshold status
             dist = hand_result['distance_2d']
             dist_remaining = 100 - dist
             dist_color = (0, 255, 0) if dist < 100 else (0, 165, 255)  # 绿色（接近）或橙色（远）
@@ -157,7 +157,7 @@ while True:
                 cv2.putText(annotated_frame, f"Bring hand closer: {dist_remaining}px more needed", 
                            (10, 360), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 165, 255), 2)
             
-            # 方向引导
+            # Direction guidance
             direction = hand_result.get('direction', '')
             if not hand_result['is_horizontally_aligned']:
                 if 'RIGHT' in direction:
@@ -170,7 +170,7 @@ while True:
                 elif 'BELOW' in direction:
                     guidance_parts.append("move up")
             
-            # 深度引导
+            # Depth guidance
             if not depth_result['is_same_depth']:
                 if depth_result.get('depth_diff') is not None:
                     if depth_result['depth_diff'] > 0:
@@ -178,20 +178,20 @@ while True:
                     else:
                         guidance_parts.append("move hand closer")
             
-            # 距离引导
+            # Distance guidance
             if hand_result['distance_2d'] >= 120:
                 guidance_parts.append("get closer")
         
         guidance = ", ".join(guidance_parts) if guidance_parts else "detecting"
         
-        # 提高方向引导的播报频率：每 15 帧尝试播报一次（加上 1 秒冷却时间，实现每秒一次播报）
+        # Increase direction guidance broadcast frequency: try to broadcast every 15 frames (plus 1 second cooldown, achieve broadcast once per second)
         if guidance != "detecting" and frame_count % 9 == 0:
             speak_async(guidance)
         
-        # 更新最后的引导内容，离开 grab 状态后允许下次重新首播
+        # Update the last guidance content, allow re-broadcast next time after leaving grab state
         last_guidance = guidance
         
-        # 显示未就位的原因
+        # Display reasons for not ready
         reason = []
         if hand_result['distance_2d'] is None or hand_result['distance_2d'] >= 120:
             reason.append("distance")
