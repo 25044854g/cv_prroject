@@ -55,7 +55,11 @@ print("Hand-Object Detection with Depth Started")
 print(f"Looking for: {target_object}")
 print("Press 'q' to exit...\n")
 
+cv2.namedWindow('Hand-Object Detection with Depth', cv2.WINDOW_NORMAL)
+
 frame_count = 0
+_fps_last_time = time.time()
+_fps_value = 0.0
 
 # Voice navigation: non-blocking speech + cooldown time
 _speaking = False
@@ -206,11 +210,16 @@ while True:
         cv2.putText(annotated_frame, reason_text, 
                    (10, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
     
-    # Display
+    # 显示 FPS
+    _fps_text = f"FPS: {_fps_value:.1f}"
+    _fps_text_size = cv2.getTextSize(_fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+    cv2.putText(annotated_frame, _fps_text,
+                (annotated_frame.shape[1] - _fps_text_size[0] - 10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
     if frame_count % 3 == 0:
         cv2.imshow('Hand-Object Detection with Depth', annotated_frame)
     
-    if cv2.waitKey(500) & 0xFF == ord('q'):
+    if cv2.waitKey(1) & 0xFF == ord('q'):
         print("Exited")
         break
 
