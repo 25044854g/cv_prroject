@@ -9,10 +9,10 @@ ssl._create_default_https_context = ssl._create_unverified_context
 url = 'https://github.com/google-ai-edge/mediapipe/releases/download/v0.10.0/hand_landmarker.task'
 filename = 'hand_landmarker.task'
 
-print('正在从 GitHub 下载模型...')
+print('⏳ 正在从 GitHub 下载模型...')
 try:
     urllib.request.urlretrieve(url, filename)
     size = os.path.getsize(filename)
-    print(f'下载完成！文件大小: {size / 1024 / 1024:.2f} MB')
+    print(f'✓ 下载完成！文件大小: {size / 1024 / 1024:.2f} MB')
 except Exception as e:
-    print(f'下载失败: {e}')
+    print(f'❌ 下载失败: {e}')

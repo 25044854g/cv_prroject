@@ -8,21 +8,21 @@ import os
 
 
 class DepthDetector:
-    """Depth detection module"""
+    """深度检测模块"""
     
     def __init__(self, target_object="cell phone"):
-        """Initialize depth detection module"""
-        # Get script directory path
+        """初始化深度检测模块"""
+        # 获取路径
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.base_dir = base_dir
         
-        # Initialize YOLO
+        # 初始化 YOLO
         self.yolo_model = YOLO(os.path.join(base_dir, 'yolov8m.pt'))
         self.hand_backend = 'mediapipe'
         self.detector = None
         self.pose_model = None
 
-        # Initialize MediaPipe hand detection, fall back to YOLO pose if blocked by system policy.
+        # 初始化 MediaPipe 手部检测，若被系统策略阻止则回退到 YOLO pose。
         model_path = os.path.join(base_dir, 'hand_landmarker.task')
 
         if not os.path.exists(model_path):
@@ -41,7 +41,7 @@ class DepthDetector:
         self.target_object = target_object.lower()
 
     def get_hand_anchor_point(self, hand_landmarks, frame_width, frame_height):
-        """Consistent with the runnable example, use the middle fingertip as the hand position."""
+        """与可运行示例保持一致，使用中指指尖作为手部位置。"""
         middle_finger = hand_landmarks[12]
         anchor_x = int(middle_finger.x * frame_width)
         anchor_y = int(middle_finger.y * frame_height)

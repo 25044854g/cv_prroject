@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import os
 
-print("MediaPipe version:", mp.__version__)
+print("✓ MediaPipe version:", mp.__version__)
 
 # Resolve paths relative to this script's directory
 base_dir = os.path.dirname(os.path.abspath(__file__))

@@ -18,9 +18,9 @@ model_path = 'hand_landmarker.task'
 
 # 如果模型不存在，下载它
 if not os.path.exists(model_path):
-    print("正在下载 MediaPipe 手部模型...")
+    print("⏳ 正在下载 MediaPipe 手部模型...")
     os.system('wget https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker.task')
-    print("模型下载完成")
+    print("✓ 模型下载完成")
 
 # 创建手部检测器
 base_options = python.BaseOptions(model_asset_path=model_path)
@@ -30,8 +30,8 @@ detector = vision.HandLandmarker.create_from_options(options)
 # 打开摄像头
 cap = cv2.VideoCapture(0)
 
-print("手部+物体检测已启动（新版 MediaPipe API）")
-print("将你的手指向某个物体")
+print("✓ 手部+物体检测已启动（新版 MediaPipe API）")
+print("👋 将你的手指向某个物体")
 print("按 'q' 键退出...\n")
 
 frame_count = 0

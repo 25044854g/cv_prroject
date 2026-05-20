@@ -11,8 +11,8 @@ yolo_pose = YOLO('yolov8n-pose.pt')
 
 cap = cv2.VideoCapture(0)
 
-print("手部+物体检测已启动（YOLO Pose）")
-print(" 将你的手指向某个物体")
+print("✓ 手部+物体检测已启动（YOLO Pose）")
+print("👋 将你的手指向某个物体")
 print("按 'q' 键退出...\n")
 
 frame_count = 0

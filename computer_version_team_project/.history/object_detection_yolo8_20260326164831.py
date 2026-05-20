@@ -9,7 +9,7 @@ model = YOLO('yolov8n.pt')
 cap = cv2.VideoCapture(0)
 
 print("✓ 物体检测已启动")
-print(" YOLO模型正在加载中...（第一次会慢一些）")
+print("🎯 YOLO模型正在加载中...（第一次会慢一些）")
 print("按 'q' 键退出...")
 
 frame_count = 0
